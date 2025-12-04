@@ -2,6 +2,31 @@
 
 本文档详细说明如何使用 Sora2API 创建角色和生成视频/图片。
 
+## 快速开始
+
+### 部署
+
+**本地 Docker 部署:**
+```bash
+docker-compose up -d
+# 服务运行在 http://localhost:8000
+```
+
+**GCP 云端部署:**
+```bash
+cd gcp
+./deploy.sh --project YOUR_PROJECT_ID
+# 详见 gcp/README.md
+```
+
+### 配置
+
+1. 修改 `config/setting.toml` 中的 `api_key`
+2. 访问管理面板添加 Sora Token: `http://YOUR_HOST:8000`
+3. 默认管理员: `admin` / `admin`
+
+---
+
 ## 基础信息
 
 ### 接口地址
