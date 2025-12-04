@@ -425,7 +425,8 @@ class GenerationHandler:
             raise e
     
     async def _poll_task_result(self, task_id: str, token: str, is_video: bool,
-                                stream: bool, prompt: str, token_id: int = None) -> AsyncGenerator[str, None]:
+                                stream: bool, prompt: str, token_id: int = None,
+                                character_username: str = None) -> AsyncGenerator[str, None]:
         """Poll for task result with timeout"""
         # Get timeout from config
         timeout = config.video_timeout if is_video else config.image_timeout
@@ -686,8 +687,11 @@ class GenerationHandler:
 
                                 if stream:
                                     # Final response with content
+                                    video_content = f"```html\n<video src='{local_url}' controls></video>\n```"
+                                    if character_username:
+                                        video_content += f"\n\n角色已保存: @{character_username}"
                                     yield self._format_stream_chunk(
-                                        content=f"```html\n<video src='{local_url}' controls></video>\n```",
+                                        content=video_content,
                                         finish_reason="STOP"
                                     )
                                     yield "data: [DONE]\n\n"
@@ -1063,9 +1067,9 @@ class GenerationHandler:
         4. Download and cache avatar
         5. Upload avatar
         6. Finalize character
-        7. Generate video with character (@username + prompt)
-        8. Delete character
-        9. Return video result
+        7. Set character as public (preserved for future use)
+        8. Generate video with character (@username + prompt)
+        9. Return video result and character username
         """
         token_obj = await self.load_balancer.select_token(for_video_generation=True)
         if not token_obj:
@@ -1149,7 +1153,14 @@ class GenerationHandler:
             )
             debug_logger.log_info(f"Character finalized, character_id: {character_id}")
 
-            # Step 6: Generate video with character
+            # Step 6: Set character as public (preserve for future use)
+            yield self._format_stream_chunk(
+                reasoning_content="Setting character as public...\n"
+            )
+            await self.sora_client.set_character_public(cameo_id, token_obj.token)
+            debug_logger.log_info(f"Character set to public: {cameo_id}, username: {username}")
+
+            # Step 7: Generate video with character
             yield self._format_stream_chunk(
                 reasoning_content="**Video Generation Process Begins**\n\nGenerating video with character...\n"
             )
@@ -1182,8 +1193,8 @@ class GenerationHandler:
             # Record usage
             await self.token_manager.record_usage(token_obj.id, is_video=True)
 
-            # Poll for results
-            async for chunk in self._poll_task_result(task_id, token_obj.token, True, True, full_prompt, token_obj.id):
+            # Poll for results (pass username to include in response)
+            async for chunk in self._poll_task_result(task_id, token_obj.token, True, True, full_prompt, token_obj.id, character_username=username):
                 yield chunk
 
             # Record success
@@ -1199,21 +1210,7 @@ class GenerationHandler:
                 response_text=str(e)
             )
             raise
-        finally:
-            # Step 7: Delete character
-            if character_id:
-                try:
-                    yield self._format_stream_chunk(
-                        reasoning_content="Cleaning up temporary character...\n"
-                    )
-                    await self.sora_client.delete_character(character_id, token_obj.token)
-                    debug_logger.log_info(f"Character deleted: {character_id}")
-                except Exception as e:
-                    debug_logger.log_error(
-                        error_message=f"Failed to delete character: {str(e)}",
-                        status_code=500,
-                        response_text=str(e)
-                    )
+        # Note: Character is preserved (set to public) for future use, not deleted
 
     async def _handle_remix(self, remix_target_id: str, prompt: str, model_config: Dict) -> AsyncGenerator[str, None]:
         """Handle remix video generation
