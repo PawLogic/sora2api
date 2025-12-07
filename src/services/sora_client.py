@@ -491,21 +491,18 @@ class SoraClient:
             username: Character username
             display_name: Character display name
             profile_asset_pointer: Asset pointer from upload_character_image
-            instruction_set: Character instruction set (not used by API, always set to None)
+            instruction_set: Character appearance description (How your character appears in videos)
             token: Access token
 
         Returns:
             character_id
         """
-        # Note: API always expects instruction_set to be null
-        # The instruction_set parameter is kept for backward compatibility but not used
-        _ = instruction_set  # Suppress unused parameter warning
         json_data = {
             "cameo_id": cameo_id,
             "username": username,
             "display_name": display_name,
             "profile_asset_pointer": profile_asset_pointer,
-            "instruction_set": None,
+            "instruction_set": instruction_set,
             "safety_instruction_set": None
         }
 

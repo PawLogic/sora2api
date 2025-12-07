@@ -210,6 +210,7 @@ class GenerationHandler:
                                image: Optional[str] = None,
                                video: Optional[str] = None,
                                remix_target_id: Optional[str] = None,
+                               character_description: Optional[str] = None,
                                stream: bool = True) -> AsyncGenerator[str, None]:
         """Handle generation request
 
@@ -219,6 +220,7 @@ class GenerationHandler:
             image: Base64 encoded image
             video: Base64 encoded video or video URL
             remix_target_id: Sora share link video ID for remix
+            character_description: Character appearance description (How your character appears in videos)
             stream: Whether to stream response
         """
         start_time = time.time()
@@ -263,12 +265,12 @@ class GenerationHandler:
 
                 # If no prompt, just create character and return
                 if not prompt:
-                    async for chunk in self._handle_character_creation_only(video_data, model_config):
+                    async for chunk in self._handle_character_creation_only(video_data, model_config, character_description):
                         yield chunk
                     return
                 else:
                     # If prompt provided, create character and generate video
-                    async for chunk in self._handle_character_and_video_generation(video_data, prompt, model_config):
+                    async for chunk in self._handle_character_and_video_generation(video_data, prompt, model_config, character_description):
                         yield chunk
                     return
 
@@ -941,7 +943,8 @@ class GenerationHandler:
 
     # ==================== Character Creation and Remix Handlers ====================
 
-    async def _handle_character_creation_only(self, video_data, model_config: Dict) -> AsyncGenerator[str, None]:
+    async def _handle_character_creation_only(self, video_data, model_config: Dict,
+                                              character_description: Optional[str] = None) -> AsyncGenerator[str, None]:
         """Handle character creation only (no video generation)
 
         Flow:
@@ -953,6 +956,11 @@ class GenerationHandler:
         6. Finalize character
         7. Set character as public
         8. Return success message
+
+        Args:
+            video_data: Video bytes or URL
+            model_config: Model configuration
+            character_description: Optional character appearance description (How your character appears in videos)
         """
         token_obj = await self.load_balancer.select_token(for_video_generation=True)
         if not token_obj:
@@ -1022,8 +1030,8 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # instruction_set_hint is a string, but instruction_set in cameo_status might be an array
-            instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+            # Use user-provided character_description first, fallback to system-detected instruction_set_hint
+            instruction_set = character_description or cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1057,7 +1065,8 @@ class GenerationHandler:
             )
             raise
 
-    async def _handle_character_and_video_generation(self, video_data, prompt: str, model_config: Dict) -> AsyncGenerator[str, None]:
+    async def _handle_character_and_video_generation(self, video_data, prompt: str, model_config: Dict,
+                                                      character_description: Optional[str] = None) -> AsyncGenerator[str, None]:
         """Handle character creation and video generation
 
         Flow:
@@ -1070,6 +1079,12 @@ class GenerationHandler:
         7. Set character as public (preserved for future use)
         8. Generate video with character (@username + prompt)
         9. Return video result and character username
+
+        Args:
+            video_data: Video bytes or URL
+            prompt: Generation prompt
+            model_config: Model configuration
+            character_description: Optional character appearance description (How your character appears in videos)
         """
         token_obj = await self.load_balancer.select_token(for_video_generation=True)
         if not token_obj:
@@ -1140,8 +1155,8 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # instruction_set_hint is a string, but instruction_set in cameo_status might be an array
-            instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+            # Use user-provided character_description first, fallback to system-detected instruction_set_hint
+            instruction_set = character_description or cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,

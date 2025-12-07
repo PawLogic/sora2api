@@ -48,6 +48,15 @@ Authorization: Bearer <your-api-key>
 }
 ```
 
+### 可选参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `video` | string | Base64 编码的视频或视频 URL（用于创建角色） |
+| `image` | string | Base64 编码的图片（用于参考图生成视频） |
+| `remix_target_id` | string | Sora 分享链接 ID（用于 Remix） |
+| `character_description` | string | 角色外观描述（对应网页端 "How your character appears in videos"） |
+
 > **重要**: 生成功能必须使用 `stream: true`，非流式模式仅用于检查 token 可用性。
 
 ---
@@ -94,9 +103,12 @@ curl -X POST "http://your-server:8000/v1/chat/completions" \
         }
       ]
     }],
+    "character_description": "一位长发女性，穿着红色连衣裙，表情活泼开朗",
     "stream": true
   }'
 ```
+
+> **提示**: `character_description` 参数可选，用于描述角色在视频中的外观特征（对应 Sora 网页端的 "How your character appears in videos"）。如不提供，系统会自动从视频中识别。
 
 ### Python 示例
 
@@ -127,6 +139,8 @@ response = requests.post(
                 }
             ]
         }],
+        # 可选：描述角色外观特征
+        "character_description": "一位长发女性，穿着红色连衣裙，表情活泼开朗",
         "stream": True
     },
     stream=True
@@ -243,6 +257,7 @@ curl -X POST "http://your-server:8000/v1/chat/completions" \
         }
       ]
     }],
+    "character_description": "一位长发女性，穿着红色连衣裙，表情活泼开朗",
     "stream": true
   }'
 ```
@@ -279,6 +294,8 @@ response = requests.post(
                 }
             ]
         }],
+        # 可选：描述角色外观特征
+        "character_description": "一位长发女性，穿着红色连衣裙，表情活泼开朗",
         "stream": True
     },
     stream=True
