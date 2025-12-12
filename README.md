@@ -342,6 +342,38 @@ curl -X POST "http://localhost:8000/v1/chat/completions" \
   }'
 ```
 
+**场景 3: 从图片创建角色**
+
+上传图片生成视频，并从该视频创建角色（一步完成）。
+
+```bash
+curl -X POST "http://localhost:8000/v1/chat/completions" \
+  -H "Authorization: Bearer han1234" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sora-video-landscape-10s",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/jpeg;base64,<base64_encoded_image_data>"
+            }
+          },
+          {
+            "type": "text",
+            "text": "角色在花园里漫步"
+          }
+        ]
+      }
+    ],
+    "stream": true,
+    "create_character": true
+  }'
+```
+
 #### Python 代码示例
 
 ```python
