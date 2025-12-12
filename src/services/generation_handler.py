@@ -1004,7 +1004,7 @@ class GenerationHandler:
                 reasoning_content="Processing video to extract character...\n"
             )
             cameo_status = await self._poll_cameo_status(cameo_id, token_obj.token)
-            debug_logger.log_info(f"Cameo status: {cameo_status}")
+            debug_logger.log_info(f"Full cameo_status response: {json.dumps(cameo_status, indent=2)}")
 
             # Extract character info immediately after polling completes
             username_hint = cameo_status.get("username_hint", "character")
@@ -1040,14 +1040,11 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # Use user-provided character_description first, fallback to system-detected instruction_set_hint
-            # Always use system-detected instruction_set (API returns correct format)
-            # character_description is only used for user reference, not sent to API
-            instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+            # Get instruction_set from cameo_status (use exactly what API returns)
+            instruction_set = cameo_status.get("instruction_set_hint")
             if instruction_set is None:
-                # Fallback: use empty instruction set if not available
-                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
-                instruction_set = {}
+                instruction_set = cameo_status.get("instruction_set")
+            debug_logger.log_info(f"Using instruction_set: {instruction_set}")
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1135,7 +1132,7 @@ class GenerationHandler:
                 reasoning_content="Processing video to extract character...\n"
             )
             cameo_status = await self._poll_cameo_status(cameo_id, token_obj.token)
-            debug_logger.log_info(f"Cameo status: {cameo_status}")
+            debug_logger.log_info(f"Full cameo_status response: {json.dumps(cameo_status, indent=2)}")
 
             # Extract character info immediately after polling completes
             username_hint = cameo_status.get("username_hint", "character")
@@ -1171,14 +1168,11 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # Use user-provided character_description first, fallback to system-detected instruction_set_hint
-            # Always use system-detected instruction_set (API returns correct format)
-            # character_description is only used for user reference, not sent to API
-            instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+            # Get instruction_set from cameo_status (use exactly what API returns)
+            instruction_set = cameo_status.get("instruction_set_hint")
             if instruction_set is None:
-                # Fallback: use empty instruction set if not available
-                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
-                instruction_set = {}
+                instruction_set = cameo_status.get("instruction_set")
+            debug_logger.log_info(f"Using instruction_set: {instruction_set}")
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1490,7 +1484,7 @@ class GenerationHandler:
                 reasoning_content="Processing video to extract character...\n"
             )
             cameo_status = await self._poll_cameo_status(cameo_id, token_obj.token)
-            debug_logger.log_info(f"Cameo status: {cameo_status}")
+            debug_logger.log_info(f"Full cameo_status response: {json.dumps(cameo_status, indent=2)}")
 
             # Extract character info
             username_hint = cameo_status.get("username_hint", "character")
@@ -1517,13 +1511,11 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # Always use system-detected instruction_set (API returns correct format)
-            # character_description is only used for user reference, not sent to API
-            instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+            # Get instruction_set from cameo_status (use exactly what API returns)
+            instruction_set = cameo_status.get("instruction_set_hint")
             if instruction_set is None:
-                # Fallback: use empty instruction set if not available
-                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
-                instruction_set = {}
+                instruction_set = cameo_status.get("instruction_set")
+            debug_logger.log_info(f"Using instruction_set: {instruction_set}")
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,

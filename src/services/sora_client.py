@@ -502,9 +502,11 @@ class SoraClient:
             "username": username,
             "display_name": display_name,
             "profile_asset_pointer": profile_asset_pointer,
-            "instruction_set": instruction_set,
             "safety_instruction_set": None
         }
+        # Only add instruction_set if it has a value
+        if instruction_set is not None:
+            json_data["instruction_set"] = instruction_set
 
         result = await self._make_request("POST", "/characters/finalize", token, json_data=json_data)
         return result.get("character", {}).get("character_id")
