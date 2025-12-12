@@ -1045,9 +1045,9 @@ class GenerationHandler:
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
             if character_description and isinstance(character_description, str):
                 # If user provided a custom description, wrap it in the expected format
-                instruction_set = {"description": character_description}
+                instruction_set = {"value": character_description}
             elif instruction_set is None:
-                instruction_set = {"description": display_name}
+                instruction_set = {"value": display_name}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1176,9 +1176,9 @@ class GenerationHandler:
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
             if character_description and isinstance(character_description, str):
                 # If user provided a custom description, wrap it in the expected format
-                instruction_set = {"description": character_description}
+                instruction_set = {"value": character_description}
             elif instruction_set is None:
-                instruction_set = {"description": display_name}
+                instruction_set = {"value": display_name}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1521,9 +1521,9 @@ class GenerationHandler:
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
             if character_description and isinstance(character_description, str):
                 # If user provided a custom description, wrap it in the expected format
-                instruction_set = {"description": character_description}
+                instruction_set = {"value": character_description}
             elif instruction_set is None:
-                instruction_set = {"description": display_name}
+                instruction_set = {"value": display_name}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
