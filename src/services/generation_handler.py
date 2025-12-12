@@ -211,6 +211,7 @@ class GenerationHandler:
                                video: Optional[str] = None,
                                remix_target_id: Optional[str] = None,
                                character_description: Optional[str] = None,
+                               create_character: bool = False,
                                stream: bool = True) -> AsyncGenerator[str, None]:
         """Handle generation request
 
@@ -221,6 +222,7 @@ class GenerationHandler:
             video: Base64 encoded video or video URL
             remix_target_id: Sora share link video ID for remix
             character_description: Character appearance description (How your character appears in videos)
+            create_character: Whether to create character from generated video (for image-to-video)
             stream: Whether to stream response
         """
         start_time = time.time()
@@ -273,6 +275,13 @@ class GenerationHandler:
                     async for chunk in self._handle_character_and_video_generation(video_data, prompt, model_config, character_description):
                         yield chunk
                     return
+
+            # Image-to-video with character creation flow: image + prompt + create_character
+            if image and prompt and create_character:
+                image_data = self._decode_base64_image(image)
+                async for chunk in self._handle_image_to_video_with_character(image_data, prompt, model_config, character_description):
+                    yield chunk
+                return
 
         # Streaming mode: proceed with actual generation
         # Select token (with lock for image generation, Sora2 quota check for video generation)
@@ -1372,3 +1381,232 @@ class GenerationHandler:
                 continue
 
         raise Exception(f"Cameo processing timeout after {timeout} seconds")
+
+    async def _handle_image_to_video_with_character(self, image_data: bytes, prompt: str, model_config: Dict,
+                                                     character_description: Optional[str] = None) -> AsyncGenerator[str, None]:
+        """Handle image-to-video generation with character creation
+
+        Flow:
+        1. Upload image
+        2. Generate video using image as first frame
+        3. Wait for video completion and get URL
+        4. Download generated video
+        5. Upload video to create character
+        6. Poll for character processing
+        7. Download and upload avatar
+        8. Finalize character
+        9. Set character as public
+        10. Return video URL + character username
+
+        Args:
+            image_data: Image file bytes
+            prompt: Generation prompt
+            model_config: Model configuration
+            character_description: Optional character appearance description
+        """
+        token_obj = await self.load_balancer.select_token(for_video_generation=True)
+        if not token_obj:
+            raise Exception("No available tokens for video generation")
+
+        video_url = None
+        character_username = None
+
+        try:
+            yield self._format_stream_chunk(
+                reasoning_content="**Image-to-Video with Character Creation Begins**\n\nInitializing...\n",
+                is_first=True
+            )
+
+            # Step 1: Upload image
+            yield self._format_stream_chunk(
+                reasoning_content="Uploading image...\n"
+            )
+            media_id = await self.sora_client.upload_image(image_data, token_obj.token)
+            debug_logger.log_info(f"Image uploaded, media_id: {media_id}")
+
+            # Step 2: Generate video
+            yield self._format_stream_chunk(
+                reasoning_content="**Video Generation Process Begins**\n\nGenerating video from image...\n"
+            )
+
+            n_frames = model_config.get("n_frames", 300)
+            task_id = await self.sora_client.generate_video(
+                prompt, token_obj.token,
+                orientation=model_config["orientation"],
+                media_id=media_id,
+                n_frames=n_frames
+            )
+            debug_logger.log_info(f"Video generation started, task_id: {task_id}")
+
+            # Save task to database
+            task = Task(
+                task_id=task_id,
+                token_id=token_obj.id,
+                model=f"sora-video-{model_config['orientation']}",
+                prompt=prompt,
+                status="processing",
+                progress=0.0
+            )
+            await self.db.create_task(task)
+            await self.token_manager.record_usage(token_obj.id, is_video=True)
+
+            # Step 3: Poll for video completion
+            video_url = await self._poll_video_and_get_url(task_id, token_obj.token)
+            debug_logger.log_info(f"Video completed, URL: {video_url}")
+
+            yield self._format_stream_chunk(
+                reasoning_content=f"**Video Generation Completed**\n\nVideo URL: {video_url}\n\n"
+            )
+
+            # Step 4: Download generated video
+            yield self._format_stream_chunk(
+                reasoning_content="**Character Creation Begins**\n\nDownloading generated video for character extraction...\n"
+            )
+            video_bytes = await self._download_file(video_url)
+            debug_logger.log_info(f"Video downloaded, size: {len(video_bytes)} bytes")
+
+            # Step 5: Upload video to create character
+            yield self._format_stream_chunk(
+                reasoning_content="Uploading video for character creation...\n"
+            )
+            cameo_id = await self.sora_client.upload_character_video(video_bytes, token_obj.token)
+            debug_logger.log_info(f"Character video uploaded, cameo_id: {cameo_id}")
+
+            # Step 6: Poll for character processing
+            yield self._format_stream_chunk(
+                reasoning_content="Processing video to extract character...\n"
+            )
+            cameo_status = await self._poll_cameo_status(cameo_id, token_obj.token)
+            debug_logger.log_info(f"Cameo status: {cameo_status}")
+
+            # Extract character info
+            username_hint = cameo_status.get("username_hint", "character")
+            display_name = cameo_status.get("display_name_hint", "Character")
+            username = self._process_character_username(username_hint)
+
+            yield self._format_stream_chunk(
+                reasoning_content=f"✨ 角色已识别: {display_name} (@{username})\n"
+            )
+
+            # Step 7: Download and upload avatar
+            yield self._format_stream_chunk(
+                reasoning_content="Downloading and uploading character avatar...\n"
+            )
+            profile_asset_url = cameo_status.get("profile_asset_url")
+            if not profile_asset_url:
+                raise Exception("Profile asset URL not found in cameo status")
+
+            avatar_data = await self.sora_client.download_character_image(profile_asset_url)
+            asset_pointer = await self.sora_client.upload_character_image(avatar_data, token_obj.token)
+            debug_logger.log_info(f"Avatar uploaded, asset_pointer: {asset_pointer}")
+
+            # Step 8: Finalize character
+            yield self._format_stream_chunk(
+                reasoning_content="Finalizing character creation...\n"
+            )
+            instruction_set = character_description or cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
+
+            character_id = await self.sora_client.finalize_character(
+                cameo_id=cameo_id,
+                username=username,
+                display_name=display_name,
+                profile_asset_pointer=asset_pointer,
+                instruction_set=instruction_set,
+                token=token_obj.token
+            )
+            debug_logger.log_info(f"Character finalized, character_id: {character_id}")
+
+            # Step 9: Set character as public
+            yield self._format_stream_chunk(
+                reasoning_content="Setting character as public...\n"
+            )
+            await self.sora_client.set_character_public(cameo_id, token_obj.token)
+            debug_logger.log_info(f"Character set as public")
+
+            character_username = username
+
+            # Record success
+            await self.token_manager.record_success(token_obj.id, is_video=True)
+
+            # Step 10: Return video URL + character info
+            video_content = f"```html\n<video src='{video_url}' controls></video>\n```"
+            video_content += f"\n\n角色已创建: @{character_username}"
+
+            yield self._format_stream_chunk(
+                content=video_content,
+                finish_reason="STOP"
+            )
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            if token_obj:
+                await self.token_manager.record_error(token_obj.id)
+            debug_logger.log_error(
+                error_message=f"Image-to-video with character creation failed: {str(e)}",
+                status_code=500,
+                response_text=str(e)
+            )
+            raise
+
+    async def _poll_video_and_get_url(self, task_id: str, token: str, timeout: int = None) -> str:
+        """Poll for video completion and return the video URL
+
+        Args:
+            task_id: The video generation task ID
+            token: Access token
+            timeout: Maximum time to wait (defaults to config.video_timeout)
+
+        Returns:
+            Video URL (downloadable_url or url from drafts)
+        """
+        if timeout is None:
+            timeout = config.video_timeout
+        poll_interval = config.poll_interval
+        max_attempts = int(timeout / poll_interval)
+        start_time = time.time()
+
+        debug_logger.log_info(f"Polling for video completion: task_id={task_id}, timeout={timeout}s")
+
+        for attempt in range(max_attempts):
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout:
+                raise Exception(f"Video generation timeout after {elapsed_time:.1f} seconds")
+
+            await asyncio.sleep(poll_interval)
+
+            try:
+                # Check pending tasks
+                pending_tasks = await self.sora_client.get_pending_tasks(token)
+                task_found = False
+
+                for task in pending_tasks:
+                    if task.get("id") == task_id:
+                        task_found = True
+                        progress_pct = task.get("progress_pct")
+                        if progress_pct is not None:
+                            debug_logger.log_info(f"Video progress: {int(progress_pct * 100)}%")
+                        break
+
+                # If not found in pending, check drafts for completion
+                if not task_found:
+                    debug_logger.log_info(f"Task {task_id} not in pending, checking drafts...")
+                    result = await self.sora_client.get_video_drafts(token)
+                    items = result.get("items", [])
+
+                    for item in items:
+                        if item.get("task_id") == task_id:
+                            # Found completed video
+                            url = item.get("downloadable_url") or item.get("url")
+                            if url:
+                                debug_logger.log_info(f"Video found in drafts: {url}")
+                                await self.db.update_task(task_id, "completed", 100.0, result_urls=json.dumps([url]))
+                                return url
+                            else:
+                                raise Exception("Video URL not found in drafts")
+
+            except Exception as e:
+                if attempt >= max_attempts - 1:
+                    raise e
+                continue
+
+        raise Exception(f"Video generation timeout after {timeout} seconds")

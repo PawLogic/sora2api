@@ -136,6 +136,9 @@ async def create_chat_completion(
         model_config = MODEL_CONFIG[request.model]
         is_video_model = model_config["type"] == "video"
 
+        # Extract create_character flag
+        create_character = request.create_character
+
         # For video models with video parameter, we need streaming
         if is_video_model and (video_data or remix_target_id):
             if not request.stream:
@@ -148,6 +151,7 @@ async def create_chat_completion(
                     video=video_data,
                     remix_target_id=remix_target_id,
                     character_description=character_description,
+                    create_character=create_character,
                     stream=False
                 ):
                     result = chunk
@@ -180,6 +184,7 @@ async def create_chat_completion(
                         video=video_data,
                         remix_target_id=remix_target_id,
                         character_description=character_description,
+                        create_character=create_character,
                         stream=True
                     ):
                         yield chunk
@@ -216,6 +221,7 @@ async def create_chat_completion(
                 video=video_data,
                 remix_target_id=remix_target_id,
                 character_description=character_description,
+                create_character=create_character,
                 stream=False
             ):
                 result = chunk
