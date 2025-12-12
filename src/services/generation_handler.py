@@ -1041,13 +1041,13 @@ class GenerationHandler:
                 reasoning_content="Finalizing character creation...\n"
             )
             # Use user-provided character_description first, fallback to system-detected instruction_set_hint
-            # Use system-detected instruction_set first (already a dict), then format character_description if needed
+            # Always use system-detected instruction_set (API returns correct format)
+            # character_description is only used for user reference, not sent to API
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
-            if character_description and isinstance(character_description, str):
-                # If user provided a custom description, wrap it in the expected format (value is a list)
-                instruction_set = {"value": [character_description]}
-            elif instruction_set is None:
-                instruction_set = {"value": [display_name]}
+            if instruction_set is None:
+                # Fallback: use empty instruction set if not available
+                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
+                instruction_set = {}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1172,13 +1172,13 @@ class GenerationHandler:
                 reasoning_content="Finalizing character creation...\n"
             )
             # Use user-provided character_description first, fallback to system-detected instruction_set_hint
-            # Use system-detected instruction_set first (already a dict), then format character_description if needed
+            # Always use system-detected instruction_set (API returns correct format)
+            # character_description is only used for user reference, not sent to API
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
-            if character_description and isinstance(character_description, str):
-                # If user provided a custom description, wrap it in the expected format (value is a list)
-                instruction_set = {"value": [character_description]}
-            elif instruction_set is None:
-                instruction_set = {"value": [display_name]}
+            if instruction_set is None:
+                # Fallback: use empty instruction set if not available
+                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
+                instruction_set = {}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
@@ -1517,13 +1517,13 @@ class GenerationHandler:
             yield self._format_stream_chunk(
                 reasoning_content="Finalizing character creation...\n"
             )
-            # Use system-detected instruction_set first (already a dict), then format character_description if needed
+            # Always use system-detected instruction_set (API returns correct format)
+            # character_description is only used for user reference, not sent to API
             instruction_set = cameo_status.get("instruction_set_hint") or cameo_status.get("instruction_set")
-            if character_description and isinstance(character_description, str):
-                # If user provided a custom description, wrap it in the expected format (value is a list)
-                instruction_set = {"value": [character_description]}
-            elif instruction_set is None:
-                instruction_set = {"value": [display_name]}
+            if instruction_set is None:
+                # Fallback: use empty instruction set if not available
+                debug_logger.log_warning("instruction_set_hint not found in cameo_status, using empty dict")
+                instruction_set = {}
 
             character_id = await self.sora_client.finalize_character(
                 cameo_id=cameo_id,
